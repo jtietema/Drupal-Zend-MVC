@@ -29,7 +29,6 @@ Example `hook_zend_mvc_app()`:
     function myapp_zend_mvc_app() {
       return array(
         'myapp' => array(
-          'location' => dirname(__FILE__),
           'title' => 'My Example ZF App',
           'embedded' => true,
           'autoload' => true,
@@ -41,7 +40,7 @@ Example `hook_zend_mvc_app()`:
 
 A quick rundown of the options
 
-* *machinename* this is de array key, this **must** be the same as your Drupal module name.
+* *machinename* this is the array key, this **must** be the same as your Drupal module name.
 * title: Drupal requires a title for menu options and url's, this is your applications default title
 * embedded: if true Drupal will continue rendering after the ZF request finishes
 * autoload: should zend_mvc setup the autoloader?

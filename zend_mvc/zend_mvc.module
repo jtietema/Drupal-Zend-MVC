@@ -124,7 +124,7 @@ function zend_mvc_dispatch($options) {
   _zend_mvc_init_db();
 
   $front = Zend_Controller_Front::getInstance();
-  $front->addModuleDirectory($options['location'] . '/app');
+  $front->addModuleDirectory($location . '/app');
 
   if (isset($options['routes'])){
     $router = $front->getRouter();
