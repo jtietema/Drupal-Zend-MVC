@@ -1,0 +1,8 @@
+name = Zend Framework MVC
+description = "Provides an integrated frontcontroller in Drupal"
+package = Administration
+core = 6.x
+version = "6.x-1.0"
+project = "zend_mvc"
+
+dependencies[] = zend

@@ -1,0 +1,159 @@
+<?php
+/**
+ * Zend_Mvc module
+ *
+ * This module allows for embedding Zend Framework applications in a Drupal
+ * site.
+ *
+ * @author Jeroen Tietema <jeroen@voidwalkers.nl>
+ * @copyright 2010-2011 Voidwalkers
+ *
+ * @todo add support for url-aliases
+ * @todo add API to interface back with drupal
+ * @todo integrate Zend_Auth with Drupal (write Zend_Auth adapter using Drupal auth)
+ * @todo integrate Zend_Form with Drupal Form API
+ * @todo add embedding of a ZF app as block instead of page
+ *
+ */
+
+/**
+ * Implementation of hook_init()
+ */
+function zend_mvc_init() {}
+
+/**
+ * Implementation of hook_menu
+ */
+function zend_mvc_menu() {
+  /**
+   * This hook allows ZF-apps to announce their precense to zend_mvc module
+   */
+  $apps = module_invoke_all('zend_mvc_app');
+
+  // Create menu items (urls for all the apps are present)
+  $items = array();
+  foreach ($apps as $app => $options) {
+    //$options['app'] = $app;
+    if (isset($options['routes'])) {
+      foreach (_zend_mvc_parse_routes($options['location'] . '/' . $options['routes'])->toArray() as $route) {
+        $items[$route['route']] = array(
+          'title' => isset($options['title']) ? $options['title'] : 'Zend Framework App',
+          'page callback' => 'zend_mvc_dispatch',
+          'page arguments' => array($options),
+          'access arguments' => array('access content'),
+          'type' => MENU_CALLBACK,
+        );
+        if (isset($route['title'])) {
+          $items[$route['route']]['title'] = $route['title'];
+          $items[$route['route']]['type'] = MENU_NORMAL_ITEM;
+        }
+      }
+    } else {
+      $items[$app] = array(
+        'title' => isset($options['title']) ? $options['title'] : 'Zend Framework App',
+        'page callback' => 'zend_mvc_dispatch',
+        'page arguments' => array($options),
+        'access arguments' => array('access content'),
+        'type' => MENU_CALLBACK,
+      );
+    }
+  }
+
+  return $items;
+}
+
+function _zend_mvc_parse_routes($filename) {
+  zend_initialize('Zend_Config_Ini');
+  $routes = new Zend_Config_Ini($filename);
+  return $routes;
+}
+
+
+/**
+ * Setup an ZF environment and run the app
+ * 
+ * @param array $options
+ * @return string|void
+ */
+function zend_mvc_dispatch($options) {
+  
+  // check if the app has a lib directory and add it to the include path
+  if (is_dir($options['location'] . '/lib')) {
+    set_include_path(get_include_path() . PATH_SEPARATOR . $options['location'] . '/lib');
+  }
+  set_include_path(get_include_path() . PATH_SEPARATOR . dirname(__FILE__) . '/lib');
+
+  // setup the ZF autoloader if requested by the ZF app
+  if ($options['autoload']) {
+    if (!zend_initialize('Zend_Loader_Autoloader')) {
+      drupal_set_message(t('Initialization of the Zend autoloader failed'));
+      return;
+    }
+    $autoloader = Zend_Loader_Autoloader::getInstance();
+    if (isset($options['autoload_namespaces'])) {
+      foreach ($options['autoload_namespaces'] as $namespace) {
+        $autoloader->registerNamespace($namespace);
+      }
+    }
+    $autoloader->registerNamespace('Drupal_');
+  }
+
+  if (!zend_initialize('Zend_Controller_Front')) {
+    drupal_set_message(t('Initialization of Zend_Controller_Front failed'));
+    return;
+  }
+
+  _zend_mvc_init_db();
+
+  $front = Zend_Controller_Front::getInstance();
+  $front->addModuleDirectory($options['location'] . '/app');
+
+  if (isset($options['routes'])){
+    $router = $front->getRouter();
+    $config = _zend_mvc_parse_routes($options['location'] . '/' . $options['routes']);
+    //$router->removeDefaultRoutes();
+    $router->addConfig($config);
+  } else {
+    $front->setBaseUrl('/' . $options['app']);
+  }
+  
+  $front->throwExceptions(true);
+  $front->returnResponse($options['embedded']);
+  $response = $front->dispatch();
+  if (!$options['embedded']) {
+    die();
+  }
+  return $response->getBody();
+}
+
+/**
+ * Initialize Zend_Db
+ * @global string $db_url
+ * @return null
+ */
+function _zend_mvc_init_db() {
+  global $db_url;
+
+  // we only support MySQL for now
+  if (false === strpos($db_url, 'mysql')) {
+    return;
+  }
+
+  $dbstring = str_replace('mysql://', '', $db_url);
+  $dbstring = str_replace('mysqli://', '', $dbstring);
+
+  list($user_part, $host_part) = explode("@", $dbstring);
+  list($username, $password) = explode(':', $user_part);
+  list($hostname, $database) = explode('/', $host_part);
+
+  zend_initialize('Zend_Db');
+  zend_initialize('Zend_Db_Table');
+
+  $db = Zend_Db::factory('Pdo_Mysql', array(
+      'host'             => $hostname,
+      'username'         => $username,
+      'password'         => $password,
+      'dbname'           => $database,
+  ));
+  Zend_Db_Table::setDefaultAdapter($db);
+}
