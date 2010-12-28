@@ -14,21 +14,32 @@
  * @license http://www.voidwalkers.nl/license/new-bsd The New BSD License
  */
 
-require_once 'Zend/Auth/Adapter/Interface.php';
-
 /**
- * Description of Drupal
+ * Zend_Translate_Adapter for Drupal translation system
  *
- * @author jeroen
+ * @author Jeroen Tietema <jeroen@voidwalkers.nl>
  */
-class Drupal_Auth_Adapter_Drupal  implements Zend_Auth_Adapter_Interface
-{
-    public function authenticate()
-    {
-      global $user;
+class Drupal_Translate_Adapter extends Zend_Translate_Adapter {
 
-      if ($user->uid != 0){
+  /**
+   * Pass translation on to Drupal
+   * 
+   * @param string $messageId
+   * @return string
+   */
+  public function translate($messageId)
+  {
+    return t($messageId);
+  }
 
-      }
-    }
+  /**
+   * We don't need to load anything as we pass everthing to Drupal
+   */
+  public function _loadTranslationData()
+  {}
+
+  public function toString()
+  {
+    return "Drupal";
+  }
 }

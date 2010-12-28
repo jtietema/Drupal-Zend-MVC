@@ -1,12 +1,26 @@
 <?php
 /**
+ * LICENSE
+ *
+ * This source file is subject to the new BSD license that is bundled
+ * with this package in the file LICENSE.txt.
+ * It is also available through the world-wide-web at this URL:
+ * http://www.voidwalkers.nl/license/new-bsd
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to license@voidwalkers.nl so we can send you a copy immediately.
+ *
+ * @copyright Copyright (c) 2010-2011 Voidwalkers (http://www.voidwalkers.nl)
+ * @license http://www.voidwalkers.nl/license/new-bsd The New BSD License
+ */
+
+/**
  * Zend_Mvc module
  *
  * This module allows for embedding Zend Framework applications in a Drupal
  * site.
  *
  * @author Jeroen Tietema <jeroen@voidwalkers.nl>
- * @copyright 2010-2011 Voidwalkers
  *
  * @todo add support for url-aliases
  * @todo add API to interface back with drupal
@@ -33,9 +47,10 @@ function zend_mvc_menu() {
   // Create menu items (urls for all the apps are present)
   $items = array();
   foreach ($apps as $app => $options) {
-    //$options['app'] = $app;
     if (isset($options['routes'])) {
-      foreach (_zend_mvc_parse_routes($options['location'] . '/' . $options['routes'])->toArray() as $route) {
+      $options['app'] = $app;
+      $location = drupal_get_path('module', $app);
+      foreach (_zend_mvc_parse_routes($location . '/' . $options['routes'])->toArray() as $route) {
         $items[$route['route']] = array(
           'title' => isset($options['title']) ? $options['title'] : 'Zend Framework App',
           'page callback' => 'zend_mvc_dispatch',
@@ -76,10 +91,13 @@ function _zend_mvc_parse_routes($filename) {
  * @return string|void
  */
 function zend_mvc_dispatch($options) {
+
+  // lookup the module path
+  $location = drupal_get_path('module', $options['app']);
   
   // check if the app has a lib directory and add it to the include path
-  if (is_dir($options['location'] . '/lib')) {
-    set_include_path(get_include_path() . PATH_SEPARATOR . $options['location'] . '/lib');
+  if (is_dir($location . '/lib')) {
+    set_include_path(get_include_path() . PATH_SEPARATOR . $location . '/lib');
   }
   set_include_path(get_include_path() . PATH_SEPARATOR . dirname(__FILE__) . '/lib');
 
@@ -110,7 +128,7 @@ function zend_mvc_dispatch($options) {
 
   if (isset($options['routes'])){
     $router = $front->getRouter();
-    $config = _zend_mvc_parse_routes($options['location'] . '/' . $options['routes']);
+    $config = _zend_mvc_parse_routes($location . '/' . $options['routes']);
     //$router->removeDefaultRoutes();
     $router->addConfig($config);
   } else {
@@ -127,7 +145,8 @@ function zend_mvc_dispatch($options) {
 }
 
 /**
- * Initialize Zend_Db
+ * Initialize Zend_Db with credentials from Drupal settings
+ * 
  * @global string $db_url
  * @return null
  */
@@ -156,4 +175,14 @@ function _zend_mvc_init_db() {
       'dbname'           => $database,
   ));
   Zend_Db_Table::setDefaultAdapter($db);
+}
+
+/**
+ * Init translation adapter bridge for using Drupal translations in Zend_Form
+ */
+function _zend_mvc_init_translation() {
+  $translate = new Zend_Translate();
+  $adapter = new Drupal_Translate_Adapter();
+  $translate->setAdapter($adapter);
+  Zend_Form::setDefaultTranslator($translate);
 }
