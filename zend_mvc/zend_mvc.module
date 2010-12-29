@@ -62,6 +62,9 @@ function zend_mvc_menu() {
           $items[$route['route']]['title'] = $route['title'];
           $items[$route['route']]['type'] = MENU_NORMAL_ITEM;
         }
+        if (isset($route['description'])) {
+          $items[$route['route']]['description'] = $route['description'];
+        }
       }
     } else {
       $items[$app] = array(
@@ -91,57 +94,62 @@ function _zend_mvc_parse_routes($filename) {
  * @return string|void
  */
 function zend_mvc_dispatch($options) {
+  try {
+    // lookup the module path
+    $location = drupal_get_path('module', $options['app']);
 
-  // lookup the module path
-  $location = drupal_get_path('module', $options['app']);
-  
-  // check if the app has a lib directory and add it to the include path
-  if (is_dir($location . '/lib')) {
-    set_include_path(get_include_path() . PATH_SEPARATOR . $location . '/lib');
-  }
-  set_include_path(get_include_path() . PATH_SEPARATOR . dirname(__FILE__) . '/lib');
-
-  // setup the ZF autoloader if requested by the ZF app
-  if ($options['autoload']) {
-    if (!zend_initialize('Zend_Loader_Autoloader')) {
-      drupal_set_message(t('Initialization of the Zend autoloader failed'));
-      return;
+    // check if the app has a lib directory and add it to the include path
+    if (is_dir($location . '/lib')) {
+      set_include_path(get_include_path() . PATH_SEPARATOR . $location . '/lib');
     }
-    $autoloader = Zend_Loader_Autoloader::getInstance();
-    if (isset($options['autoload_namespaces'])) {
-      foreach ($options['autoload_namespaces'] as $namespace) {
-        $autoloader->registerNamespace($namespace);
+    set_include_path(get_include_path() . PATH_SEPARATOR . dirname(__FILE__) . '/lib');
+
+    // setup the ZF autoloader if requested by the ZF app
+    if ($options['autoload']) {
+      if (!zend_initialize('Zend_Loader_Autoloader')) {
+        drupal_set_message(t('Initialization of the Zend autoloader failed'));
+        return;
       }
+      $autoloader = Zend_Loader_Autoloader::getInstance();
+      if (isset($options['autoload_namespaces'])) {
+        foreach ($options['autoload_namespaces'] as $namespace) {
+          $autoloader->registerNamespace($namespace);
+        }
+      }
+      $autoloader->registerNamespace('Drupal_');
     }
-    $autoloader->registerNamespace('Drupal_');
-  }
 
-  if (!zend_initialize('Zend_Controller_Front')) {
-    drupal_set_message(t('Initialization of Zend_Controller_Front failed'));
-    return;
-  }
+    if (!zend_initialize('Zend_Controller_Front')) {
+      drupal_set_message(t('Initialization of Zend_Controller_Front failed'), 'error');
+      return "";
+    }
 
-  _zend_mvc_init_db();
+    _zend_mvc_init_db();
 
-  $front = Zend_Controller_Front::getInstance();
-  $front->addModuleDirectory($location . '/app');
+    $front = Zend_Controller_Front::getInstance();
+    $front->addModuleDirectory($location . '/app');
 
-  if (isset($options['routes'])){
-    $router = $front->getRouter();
-    $config = _zend_mvc_parse_routes($location . '/' . $options['routes']);
-    //$router->removeDefaultRoutes();
-    $router->addConfig($config);
-  } else {
-    $front->setBaseUrl('/' . $options['app']);
+    if (isset($options['routes'])){
+      $router = $front->getRouter();
+      $config = _zend_mvc_parse_routes($location . '/' . $options['routes']);
+      //$router->removeDefaultRoutes();
+      $router->addConfig($config);
+    } else {
+      $front->setBaseUrl('/' . $options['app']);
+    }
+
+    $front->throwExceptions(true);
+    $front->returnResponse($options['embedded']);
+    $response = $front->dispatch();
+    if (!$options['embedded']) {
+      die();
+    }
+    return $response->getBody();
+  } catch (Exception $e) {
+    watchdog('zend_mvc', 'Exception occured: ' . $e->getMessage());
+    drupal_set_message(t('An error occurred an has been logged.'), 'error');
+    return "";
   }
-  
-  $front->throwExceptions(true);
-  $front->returnResponse($options['embedded']);
-  $response = $front->dispatch();
-  if (!$options['embedded']) {
-    die();
-  }
-  return $response->getBody();
 }
 
 /**
@@ -153,12 +161,23 @@ function zend_mvc_dispatch($options) {
 function _zend_mvc_init_db() {
   global $db_url;
 
-  // we only support MySQL for now
-  if (false === strpos($db_url, 'mysql')) {
+  if (is_array($db_url)) {
+    /**
+     *  @FIXME we only support the default site here
+     */
+    $db = $db_url['default'];
+  } else {
+    $db = $db_url;
+  }
+
+  /**
+   * @FIXME we only support MySQL for now
+   */
+  if (false === strpos($db, 'mysql')) {
     return;
   }
 
-  $dbstring = str_replace('mysql://', '', $db_url);
+  $dbstring = str_replace('mysql://', '', $db);
   $dbstring = str_replace('mysqli://', '', $dbstring);
 
   list($user_part, $host_part) = explode("@", $dbstring);
